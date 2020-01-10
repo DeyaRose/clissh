@@ -19,7 +19,8 @@ if not os.path.exists(fdir):
 		print("[!!] Error creating path")
 
 
-db = shelve.open(fullpth, flag='c', writeback=True)
+#db = shelve.open(fullpth, flag='c', writeback=True)
+db = shelve.open(fullpth)
 klist = list(db.keys())
 klen = len(klist)
 if klen == 0:
@@ -28,7 +29,7 @@ if klen == 0:
 else:
 	firstrun = False
 	for k in db:
-		menuops.append(k, db[k][0], db[k][1], db[k][2], db[k][3])
+		menuops.append([k, db[k][0], db[k][1], db[k][2], db[k][3]])
 
 #menuops.append(['<nick>', '<username>', '<password>', '<ip>', '<port>'])
 max_len = len(menuops) 
@@ -170,7 +171,7 @@ def add(addscr):
 	addscr.refresh()
 	nick = addscr.getstr(6, len(prompts[5]), 32).decode('utf8')
 	if not nick:
-		nick = '(untitled)'
+		nick = str(host)
 
 	curses.noecho()
 	addscr.addstr(9, 0, "Is the entered information correct? (Y/n)")
@@ -180,9 +181,9 @@ def add(addscr):
 		# TODO: add to the shelf
 		# TODO: make untitled keys increment in number to avoid overwriting
 		db[nick] = [user, passwd, host, port]
-		addscr.addstr(12, 0, "[+] Host added to database. Press any key to continue.", curses.A_REVERSE)
-		addscr.getkey()
+		addscr.addstr(12, 0, "[+] Host added to database located at %s. Press any key to continue." % fullpth, curses.A_REVERSE)
 		db.sync()
+		addscr.getkey()
 		pass
 	else:
 		addscr.clear()
