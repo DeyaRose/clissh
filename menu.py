@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import sys, os, shelve, curses
 from curses import wrapper
 # TODO loop through shelf, add known hosts to array, the append "exit" and "add"
@@ -20,16 +20,20 @@ if not os.path.exists(fdir):
 
 
 #db = shelve.open(fullpth, flag='c', writeback=True)
-db = shelve.open(fullpth)
-klist = list(db.keys())
-klen = len(klist)
-if klen == 0:
-    # this means the program should prompt the user to add a host
-    pass
-else:
-    firstrun = False
-    for k in db:
-        menuops.append([k, db[k][0], db[k][1], db[k][2], db[k][3]])
+def refresh_shelf():
+    try:
+        db = shelve.open(fullpth)
+    except:
+        pass
+    klist = list(db.keys())
+    klen = len(klist)
+    if klen == 0:
+        # this means the program should prompt the user to add a host
+        pass
+    else:
+        firstrun = False
+        for k in db:
+            menuops.append([k, db[k][0], db[k][1], db[k][2], db[k][3]])
 
 #menuops.append(['<nick>', '<username>', '<password>', '<ip>', '<port>'])
 max_len = len(menuops) 
@@ -117,7 +121,7 @@ def add(addscr):
     passwdconf = ''
     target = ''
     port = '22'
-    nick = '(untitled)'
+    nick = ''
     ok = False
     curses.curs_set(0)
     curses.echo()
@@ -170,17 +174,17 @@ def add(addscr):
     addscr.addstr(6, 0, prompts[5])
     addscr.refresh()
     nick = addscr.getstr(6, len(prompts[5]), 32).decode('utf8')
+    nick = nick.strip()
     if not nick:
-        nick = str(host)
+        nick = str(target)
 
     curses.noecho()
     addscr.addstr(9, 0, "Is the entered information correct? (Y/n)")
     addscr.addstr(10, 0, "Nick: %s; Target: %s; Port: %s; Username: %s; Password: (hidden)" % (nick, target, port, user))
     ch = addscr.getch()
     if ch == 121 or ch == 10:
-        # TODO: add to the shelf
-        # TODO: make untitled keys increment in number to avoid overwriting
-        db[nick] = [user, passwd, host, port]
+        # TODO: auto-add fingerprints/etc
+        db[nick] = [user, passwd, target, port]
         addscr.addstr(12, 0, "[+] Host added to database located at %s. Press any key to continue." % fullpth, curses.A_REVERSE)
         addscr.getkey()
         db.sync()
