@@ -182,8 +182,8 @@ def add(addscr):
 		# TODO: make untitled keys increment in number to avoid overwriting
 		db[nick] = [user, passwd, host, port]
 		addscr.addstr(12, 0, "[+] Host added to database located at %s. Press any key to continue." % fullpth, curses.A_REVERSE)
-		db.sync()
 		addscr.getkey()
+		db.sync()
 		pass
 	else:
 		addscr.clear()
