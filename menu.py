@@ -48,8 +48,8 @@ def refresh_db():
 
 # TODO: check and install requirements; openssh & sshpass, curses
 
-# the main menu, where the user picks options
 def menu(stdscr):
+    """The main menu, where the user picks a host or another option."""
     try:
         refresh_db()
         stdscr.clear()
@@ -116,6 +116,7 @@ def menu(stdscr):
         db.close()
 
 def add(addscr):
+    """The function for adding a remote host."""
     prompts = [
         "Enter the username: ",
         "Enter the password: ",
@@ -209,20 +210,24 @@ def add(addscr):
         pass
 
 def edit(editscr):
+    """Edit a host."""
     # TODO
     return
 
 def clearall(cascr):
+    """Remove all hosts."""
     cascr.clear()
     cascr.addstr(0, 0, "Clear All", curses.A_REVERSE)
     return
 
 def remove(remscr):
+    """Remove a specified host."""
     # del db[<name>]
     # TODO
     return
 
 def submenu(subscr):
+    """The submenu function where the user can select any other function."""
     subops = []
     subops.append('Back')
     subops.append('Add')
@@ -271,6 +276,8 @@ def submenu(subscr):
                 # TODO clear all (with an extra check or two to make sure)
             else:
                 pass
+        subscr.refresh()
 
+# start the program at the menu() function
 if __name__ == "__main__":
     wrapper(menu)
