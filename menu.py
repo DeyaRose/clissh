@@ -1,13 +1,24 @@
 #!/usr/bin/env python3
-import sys, os, shelve, curses
+import sys, os, shelve, curses, getpass, traceback, time
+import subprocess as sb
 from curses import wrapper
-# TODO loop through shelf, add known hosts to array, the append "exit" and "add"
+# TODO loop through shelf, add known hosts to array, the append "exit" and "add" (opposite of what it is now) (may be removed)
 # TODO make the hosts appear in the list they were added
-# TODO make a way to rearrange the hosts
-menuops = []
-menuops.append(['exit'])
-menuops.append(['more'])    # TODO
+# TODO make a way to sort the hosts differently
+# TODO implement different sorting methods - alphabetical, date/time added, etc
+# TODO implement "pages" if there are too many hosts (get terminal height and account for that)
+# TODO Find if an added host is a duplicate (compare ip, username, port, etc)
+#   If they are exact duplicates, tell the user and don't add
+#   If no nick is used and the ports are the only difference, display the target as "target (port)"
+#      This method should be used for most minor differences if there is no nick.
 
+# constants
+NAME = "CliSSH"
+BUILD = "1.0b"
+VERSION = NAME + " v" + str(BUILD)
+PR_DEL = 0.0#4
+
+menuops = []
 firstrun = True
 
 # create & loop thru shelf
@@ -27,6 +38,10 @@ if not os.path.exists(fdir):
 db = shelve.open(fullpth, flag='c', writeback=True)
 max_len = len(menuops)
 def refresh_db():
+    global menuops
+    del menuops[:]
+    menuops.append(['Exit'])
+    menuops.append(['More'])
     klist = list(db.keys())
     klen = len(klist)
     if klen == 0:   # if the list has nothing (empty),
@@ -36,7 +51,6 @@ def refresh_db():
         global firstrun
         firstrun = False
         for k in db:
-            global menuops
             # add it to the menu options.
             menuops.append([k, db[k][0], db[k][1], db[k][2], db[k][3]])
     global max_len
@@ -46,69 +60,94 @@ def refresh_db():
 
 # nick, user, pass, ip, port
 
-# TODO: check and install requirements; openssh & sshpass, curses
+# TODO: check and install requirements; openssh & sshpass, getpass #<curses>
+
+def connect(idx):
+    if idx < 0:
+        raise IndexError('indices cannot be negative')
+    user = menuops[idx][1]
+    passwd = menuops[idx][2]
+    target = menuops[idx][3]
+    pt = menuops[idx][4]
+    ssh_cmd = ['sshpass', '-p', passwd, 'ssh', user + '@' + target, '-p', pt]
+    rcode = sb.run(ssh_cmd)
+    return rcode.returncode
+
+def pause(flag=True):
+    if flag:
+        print("\n(Press <Enter> to continue)")
+        input()
+    else:
+        return
+
+def clear():
+    """Clears the screen."""
+    sb.run('clear')
+
+def printver():
+    print(VERSION)
+
+def printarr(start=0):
+    for i in range(0, max_len-start):
+        time.sleep(PR_DEL)
+        print("{num}. {option}".format(num=i, option=menuops[i+start][0]))
 
 def menu(stdscr):
     """The main menu, where the user picks a host or another option."""
     try:
         refresh_db()
-        stdscr.clear()
         if firstrun:
             # prompt the user to add a host if none are found
-            stdscr.addstr(0, 0, "No hosts found. Do you want to add one? (Y/n)", curses.A_REVERSE)
-            ch = stdscr.getch()
-            # 121 = 'y', 10 = newline (enter)
-            if ch == 121 or ch == 10:
-                stdscr.clear()
-                wrapper(add)
+            print("No hosts found. Do you want to add one? (Y/n)")
+            ch = input("> ")
+            if "yes" in ch or not ch:
+                add(None)
                 refresh_db()
-            elif ch == 110:
+            else:
                 pass
-        stdscr.clear()
-        curses.noecho()
-        curses.curs_set(1) 
-        stdscr.addstr(0, 0, "Pick an option:", curses.A_REVERSE)
-        for i in range(1, max_len+1):
-            stdscr.addstr(i, 0, "%d. %s" % (i, menuops[i-1][0]))
-        stdscr.move(1, 0)
         while True:
-            stdscr.refresh()
-            cury, _ = stdscr.getyx()    # get the current Y-position and put the x in a dummy variable
-            char = stdscr.getch()
-            # TODO if numeric, go to that line number (the choice)
-            # k or 107
-            if char == 107:    # move up
-                if cury == 1:
-                	stdscr.move(max_len, 0)
+            errcode = 0
+            clear()
+            printver()
+            print()
+            if errcode == 0:
+                print("Main Menu\n")
+            else:
+                print("[-] Error code:", str(errcode))
+                print()
+            print("Pick an option:")
+            printarr()
+            char = input('> ')
+            print() # add a space
+            flag = True
+            try:
+                sel = int(char)
+                if sel == 0:
+                    print('[*] Goodbye!')
+                    flag = False
+                    return
+                elif sel == 1:
+                    submenu(None)
+                    flag = False
                 else:
-                	stdscr.move(cury-1, 0)
-            # j or 106
-            if char == 106:    # move down
-                if cury == max_len:
-                	stdscr.move(1, 0)
-                else:
-                	stdscr.move(cury+1, 0)
-            if char == 10:    	# line feed
-                curses.flash()
-                if cury == 1:	# exit
-                	return
-                elif cury == 2:	# more
-                	stdscr.clear()
-                	wrapper(submenu)
-                	# pass	# TODO
-                	#submenu(curses.initscr())
-                	#stdscr.redrawwin()
-                	#stdscr.refresh()
-                else:
-                	sel = cury - 1
-                	curses.endwin()
-                	user = menuops[sel][1]
-                	passwd = menuops[sel][2]
-                	target = menuops[sel][3]
-                	pt = menuops[sel][4]
-                	ssh_cmd = " sshpass -p " + passwd + " ssh " + user + "@" + target + " -p " + pt
-                	os.system(ssh_cmd)
-                	pass
+                    if sel > max_len:
+                        raise IndexError('Out of bounds')
+                    else:
+                        clear()
+                        errcode = connect(sel)
+                    #print("[i] Error code:", str(errcode))
+            except ValueError as v:
+                print("[!!] Error: ValueError -- " + str(v))
+                del v
+            except IndexError as i:
+                print("[!!] Error: IndexError -- " + str(i))
+                del i
+            except Exception as e:
+                print("[!!] Error: " + str(e))
+                print(traceback.format_exc())
+                del e
+            finally:
+                pause(flag)
             char = ''
     except:
         pass
@@ -123,7 +162,7 @@ def add(addscr):
         "Confirm the password: ",
         "Enter the host IP: ",
         "Enter the host port (default 22): ",
-        "Enter a nickname for this host: "
+        "Enter a nickname for this host (opt.): "
     ]
     # initialize the variables
     user = ''
@@ -132,81 +171,84 @@ def add(addscr):
     target = ''
     port = '22'
     nick = ''
-    curses.curs_set(0)
-    curses.echo()
-    addscr.addstr(0, 0, "Add a Host", curses.A_REVERSE)
-    addscr.addstr(1, 0, prompts[0])
-    addscr.refresh()
+    clear()
+    printver()
+    print()
+    print("Add a Host\n")
+    print(prompts[0], end='')
     # ask for the username
-    user = addscr.getstr(1, len(prompts[0]), 32).decode('utf8')
-    curses.noecho() # for passwords
+    user = input()
     # ask for password & password confirmation
     while passwd is passwdconf: # loop should be entered because both vars are null
-        addscr.addstr(2, 0, prompts[1])
-        addscr.refresh()
-        passwd = addscr.getstr(2, len(prompts[1]))  # get first password
-        addscr.addstr(3, 0, prompts[2])
-        addscr.refresh()
-        passwdconf = addscr.getstr(3, len(prompts[2]))  # get confirmation password
+        print(prompts[1], end='')
+        passwd = getpass.getpass("")
+        print(prompts[2], end='')
+        passwdconf = getpass.getpass("")
         try:
             if passwdconf != passwd:    # if they didn't match, do it again
-                addscr.addstr(4, 0, "[!!] The passwords you entered did not match. (Press any key to retry)", curses.A_REVERSE)
+                print("[!!] The passwords you entered did not match. (Press <Enter> to retry)", end='')
                 # they don't match, so set them back to null so the loop continues
                 passwd = ''
                 passwdconf = ''
-                addscr.getkey()
+                input()
                 # delete the previous lines
-                addscr.deleteln()
-                addscr.move(3, 0)
-                addscr.deleteln()
-                addscr.move(2, 0)
-                addscr.deleteln()
+                clear()
+                printver()
+                print()
+                print("Add a Host\n")
+                print(prompts[0] + user)
             else:
                 # the passwords matched, break out of the loop
                 passwd = passwd.decode('utf8')
                 break
         except:
             pass
-    curses.echo()
-    addscr.addstr(4, 0, prompts[3])
-    addscr.refresh()
+    print(prompts[3], end='')
     # get target ip
-    target = addscr.getstr(4, len(prompts[3]), 255).decode('utf8')
-    addscr.addstr(5, 0, prompts[4])
-    addscr.refresh()
+    target = input()
+    print(prompts[4], end='')
     # get target port
-    port = addscr.getstr(5, len(prompts[4]), 5).decode('utf8')
-    if not port:
-        port = '22'
-    if int(port) > 65535 or int(port) < 0:
-        addscr.addstr(6, 0, "[!!] %d is out of range! (0-65535)" % int(port))
-        port = '22'
+    while 1:
+        try:
+            port = input()
+            if not port:
+                port = 22
+                break
+            else:
+                if int(port) > 65535 or int(port) < 0:
+                    print("[!!] {} is out of range! (0-65535)".format(port))
+                else:
+                    break
+        except ValueError as v:
+            print("[!!] Error: ValueError -- " + str(v))
+            del v
+        except Exception as e:
+            print("[!!] Error: " + str(e))
+            del e
     # TODO: check that the port is valid (loop)
-
-    addscr.addstr(6, 0, prompts[5])
-    addscr.refresh()
+    print(prompts[5], end='')
     # get the nickname for the target
-    nick = addscr.getstr(6, len(prompts[5]), 32).decode('utf8')
+    nick = input()
     if not nick:
         # if nothing is entered, make it the ip
         nick = str(target)
     # confirm with the user that the entered information was correct
-    curses.noecho()
-    addscr.addstr(9, 0, "Is the entered information correct? (Y/n)")
-    addscr.addstr(10, 0, "Nick: %s; Target: %s; Port: %s; Username: %s; Password: (hidden)" % (nick, target, port, user))
-    ch = addscr.getch()
-    if ch == 121 or ch == 10:
+    print("Is the entered information correct? (Y/n)")
+    if target == nick:
+        print("Target: {}; Port: {}; Username: {}; Password: (hidden)".format(target, port, user))
+    else:
+        print("Nick: {}; Target: {}; Port: {}; Username: {}; Password: (hidden)".format(nick, target, port, user))
+    ch = input("> ")
+    if "yes" in ch or not ch:
         # TODO: auto-add fingerprints/etc
         db[nick] = [user, passwd, target, port]
-        addscr.addstr(12, 0, "[+] Host added to database located at %s. Press any key to continue." % fullpth, curses.A_REVERSE)
+        print("[+] Host added to database located at {}.".format(fullpth))
         db.sync()
         refresh_db()
-        addscr.getkey()
+        pause()
         return
     else:
-        addscr.clear()
-        addscr.endwin()
-        wrapper(add) # TODO: clear & redo
+        add(None)
         pass
 
 def edit(editscr):
@@ -223,7 +265,41 @@ def clearall(cascr):
 def remove(remscr):
     """Remove a specified host."""
     # del db[<name>]
-    # TODO
+    while 1:
+        clear()
+        printver()
+        print()
+        print("Remove a Host\n")
+        print("Select a host to delete (-1 to exit):")
+        start = 2   # the index to start printing at
+        printarr(start)
+        ch = input("> ")
+        try:
+            sel = int(ch)
+            if sel == -1:
+                return
+            if sel < 0 or sel > max_len-start:
+                raise ValueError('Invalid selection')
+            else:
+                deletion = menuops[sel+start]
+                if deletion[0] == deletion[3]:
+                    print("Delete {ip}? This cannot be undone. (Y/n)".format(ip=deletion[0]))
+                else:
+                    print("Delete {nick} ({ip})? This cannot be undone. (Y/n)".format(nick=deletion[0], ip=deletion[3]))
+                choice = input("> ")
+                if choice in "yes" or not choice:
+                    del db[deletion[0]]
+                    db.sync()
+                    refresh_db()
+                    print("Deletion successful.")
+                    break
+                else:
+                    print("Not deleted.")
+                pause()
+        except ValueError as v:
+            print("[!!] Error: ValueError -- " + str(v))
+            del v
+    pause()
     return
 
 def submenu(subscr):
@@ -235,49 +311,46 @@ def submenu(subscr):
     subops.append('Remove')
     subops.append('Clear all')
     subops_len = len(subops)
-    subscr.clear()
-    subscr.addstr(0, 0, "More Options", curses.A_REVERSE)
-    for j in range(1, subops_len+1):
-        subscr.addstr(j, 0, "%d. %s" % (j, subops[j-1]))
-    subscr.move(1, 0)
+    #subscr.clear()
+    #subscr.addstr(0, 0, "More Options", curses.A_REVERSE)
+        #subscr.move(1, 0)
     char = ''
     while True:
-        cury, _ = subscr.getyx()
-        char = subscr.getch()
-        if char == 107:
-            if cury == 1:
-                subscr.move(subops_len, 0)
-            else:
-                subscr.move(cury-1, 0)
-        if char == 106:
-            if cury == subops_len:
-                subscr.move(1, 0)
-            else:
-                subscr.move(cury+1, 0)
-        if char == 10:
-            curses.flash()
-            if cury == 1:
-                # TODO fix
-                #subscr.clear()
-                #subscr.endwin()
+        clear()
+        printver()
+        print()
+        print("More Options\n")
+        print("Pick an option:")
+        for j in range(0, subops_len):
+            time.sleep(PR_DEL)
+            print("{num}. {option}".format(num=j, option=subops[j]))
+        ch = input("> ")
+        try:
+            sel = int(ch)
+            if sel == subops.index('Back'):
                 return
-            elif cury == 2:
-                #subscr.endwin()
-                subscr.clear()
-                wrapper(add)
-            elif cury == 3:
-                # TODO: edit
-                wrapper(edit)
-            elif cury == 4:
-                # TODO remove
-                wrapper(remove)
-            elif cury == 5:
-                wrapper(clearall)
-                # TODO clear all (with an extra check or two to make sure)
+            elif sel == subops.index('Add'):
+                add(None)
+                break
+            elif sel == subops.index('Edit'):
+                edit(None)
+                break
+            elif sel == subops.index('Remove'):
+                remove(None)
+                break
+            elif sel == subops.index('Clear all'):
+                clearall(None)
+                break
             else:
-                pass
-        subscr.refresh()
+                print("\n[!!] Invalid answer")
+                pause()
+        except ValueError as v:
+            print("[!!] Error: ValueError -- " + str(v))
+            del v
+        except Exception as e:
+            print("[!!] Error: " + str(e))
+            del e
 
 # start the program at the menu() function
 if __name__ == "__main__":
-    wrapper(menu)
+    menu(None)
