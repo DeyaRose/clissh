@@ -7,6 +7,9 @@ import subprocess as sb
 #   If they are exact duplicates, tell the user and don't add
 #   If no nick is used and the ports are the only difference, display the target as "target (port)"
 #      This method should be used for most minor differences if there is no nick.
+# TODO encrypt the data with a password
+# TODO make the user enter a password on start to decrypt the data
+# TODO multiple-user support (?)
 
 # constants
 NAME = "CliSSH"
@@ -16,6 +19,15 @@ PR_DEL = 0.04   # print delay, for that cool effect
 
 menuops = []
 firstrun = True
+
+prompts = [
+    "Enter the username: ",
+    "Enter the password: ",
+    "Confirm the password: ",
+    "Enter the host IP: ",
+    "Enter the host port (default 22): ",
+    "Enter a nickname for this host{}: "
+]
 
 # create & loop thru shelf
 fdir = os.getenv("HOME") + "/.clissh/" # the path to the hosts file
@@ -43,7 +55,7 @@ def refresh_db():
     menuops.append(['More'])
     klist = list(db.keys())
     klen = len(klist)
-    if klen == 0:   # if the list is empty,
+    if klen == 0:   # if the database is empty,
         # the program should prompt the user to add a host
         firstrun = True
     else:   # but if it has stuff,
@@ -59,8 +71,6 @@ def refresh_db():
     max_len = len(menuops)
 
 #menuops.append(['<nick>', '<username>', '<password>', '<ip>', '<port>', '<number>'])
-# TODO: Implement '<number>'
-# in listing: `if db[<nick>][4] == n; print`
 
 # nick, user, pass, ip, port
 
@@ -97,10 +107,10 @@ def printver():
     print()
     delay()
 
-def printarr(start=0):
-    for i in range(0, max_len-start):
+def printarr(start=0, list_one=False):
+    for i in range(0 if not list_one else 1, max_len-start + (0 if not list_one else 1)):
         delay()
-        print("{num}. {option}".format(num=i, option=menuops[i+start][0]))
+        print("{num}. {option}".format(num=i, option=menuops[i+start - (0 if not list_one else 1)][0]))
         #if start == 0 and not i == 0 and not i == 1:
             #if menuops[i+start][5] == i:
                 #print("[!!!]")
@@ -114,7 +124,10 @@ def menu():
         refresh_db()
         if firstrun:
             # prompt the user to add a host if none are found
+            clear()
+            printver()
             print("No hosts found. Do you want to add one? (Y/n)")
+            delay()
             ch = input("> ")
             if ch in "yes" or not ch:
                 add()
@@ -173,32 +186,14 @@ def menu():
     finally:
         db.close()
 
-def add():
-    """The function for adding a remote host."""
-    prompts = [
-        "Enter the username: ",
-        "Enter the password: ",
-        "Confirm the password: ",
-        "Enter the host IP: ",
-        "Enter the host port (default 22): ",
-        "Enter a nickname for this host (opt.): "
-    ]
-    # initialize the variables
-    n = len(list(db.keys()))
-    user = ''
+def add_user():
+    # Ask for the username
+    return input(prompts[0])
+
+def add_pass():
+    # Get the password
     passwd = ''
     passwdconf = ''
-    target = ''
-    port = '22'
-    nick = ''
-    clear()
-    printver()
-    print("Add a Host\n")
-    print("Number: " + str(n))
-    delay()
-    print(prompts[0], end='')
-    # ask for the username
-    user = input()
     # ask for password & password confirmation
     while passwd is passwdconf: # loop should be entered because both vars are null
         print(prompts[1], end='')
@@ -207,31 +202,22 @@ def add():
         passwdconf = getpass.getpass("")
         try:
             if passwdconf != passwd:    # if they didn't match, do it again
-                print("[!!] The passwords you entered did not match. (Press <Enter> to retry)", end='')
-                # they don't match, so set them back to null so the loop continues
-                passwd = ''
-                passwdconf = ''
-                input()
-                # delete the previous lines
-                clear()
-                printver()
-                print()
-                print("Add a Host\n")
-                print(prompts[0] + user)
+                return None
             else:
                 # the passwords matched, break out of the loop
                 passwd = passwd.decode('utf8')
                 break
         except:
             pass
-    print(prompts[3], end='')
-    # get target ip
-    target = input()
-    print(prompts[4], end='')
-    # get target port
+    return passwd
+
+def add_target():
+    return input(prompts[3])
+
+def add_port():
     while 1:
         try:
-            port = input()
+            port = input(prompts[4])
             if not port:
                 port = 22
                 break
@@ -246,11 +232,51 @@ def add():
         except Exception as e:
             print("[!!] Error: " + str(e))
             del e
-    # TODO: check that the port is valid (loop)
-    print(prompts[5], end='')
+    return port
+
+def add_nick(flag=True):
+    nick = input(prompts[5].format(" (opt.)" if flag else ""))
+    return None if not input else nick
+
+def add():
+    """The function for adding a remote host."""
+        # initialize the variables
+    n = len(list(db.keys()))
+    user = ''
+    passwd = ''
+    target = ''
+    port = '22'
+    nick = ''
+    clear()
+    printver()
+    print("Add a Host\n")
+    #print("Number: " + str(n))
+    delay()
+    # ask for the username
+    user = add_user()
+    while 1:
+        # delete the previous lines
+        passwd = add_pass()
+        if passwd is None:
+            print("[!!] The passwords you entered did not match. (Press <Enter> to retry)", end='')
+            # they don't match, so set them back to null so the loop continues
+            passwd = ''
+            passwdconf = ''
+            input()
+            # Delete the previous lines
+            clear()
+            printver()
+            print("Add a Host\n")
+            print(prompts[0] + user)
+        else:
+            break
+    # get target ip
+    target = add_target()
+    # get target port
+    port = add_port()
     # get the nickname for the target
-    nick = input()
-    if not nick:
+    nick = add_nick()
+    if nick is None:
         # if nothing is entered, make it the ip
         nick = str(target)
     # confirm with the user that the entered information was correct
@@ -278,7 +304,88 @@ def add():
 def edit():
     """Edit a host."""
     # TODO
-    return
+    start = 2
+    while 1:
+        clear()
+        printver()
+        print("Edit a Host\n")
+        delay()
+        print("Select a host to edit:")
+        print("0. Back")
+        printarr(start, True)
+        delay()
+        ch = input("> ")
+        print()
+        try:
+            sel = int(ch)
+            if sel == 0:
+                return
+            if sel < 0 or sel > max_len-start+1:
+                raise ValueError('Invalid selection')
+            else:
+                edit_opts = []
+                edit_opts.append('Back')
+                edit_opts.append('Nick')
+                edit_opts.append('Username')
+                edit_opts.append('Password')
+                edit_opts.append('Target')
+                edit_opts.append('Port')
+                while 1:
+                    selection = menuops[sel+start-1]
+                    clear()
+                    printver()
+                    print("Editing {}".format(selection[0] if not selection[0] == selection[3] else selection[3]) + "\n")
+                    for opt in range(len(edit_opts)):
+                        delay()
+                        print("{}. {}".format(opt, edit_opts[opt]))
+                    choice = input("> ")
+                    print()
+                    sln = int(choice)
+                    # TODO for all: if data is same as before, make no change
+                    if sln == edit_opts.index('Back'):
+                        break # Go back to selecting a host
+                    elif sln == edit_opts.index('Nick'):
+                        oldnick = selection[0]
+                        print("Old nick:", oldnick if not selection[0] == selection[3] else "<none>")
+                        new_nick = add_nick(False)
+                        if new_nick:
+                            print("New nick:", new_nick)
+                        else:
+                            # TODO: Dopy all data that had old_nick key into new_nick, then `del db[old_key]`
+                            # TODO: Duplicate checking, ask user to overwrite (Y/n), if `no`, don't do anything and exit
+                            pass
+                    elif sln == edit_opts.index('Username'):
+                        old_user = selection[1]
+                        print("Edit user")
+                        new_user = add_user()
+                        if new_user:
+                            print("New user:", new_user)
+                        else:
+                            print("[i] No user given.")
+                            # ask whether or not they meant to and if yes, exit, otherwise do it again
+                    elif sln == edit_opts.index('Password'):
+                        old_pass = selection[2]
+                        print("Edit pass")
+                    elif sln == edit_opts.index('Target'):
+                        old_target = selection[3]
+                        print("Edit target")
+                    elif sln == edit_opts.index('Port'):
+                        old_port = selection[4]
+                        print("Edit port")
+                    else:
+                        print('[!!] Invalid selection.') # Try again
+                    refresh_db()
+                    pause()
+        except ValueError as v:
+            print("[!!] Error: ValueError -- " + str(v))
+            del v
+        except EOFError:
+            return
+        except Exception as e:
+            print("[!!] Error: " + str(e))
+            print(traceback.format_exc())
+        finally:
+            pause()
 
 def clearall():
     """Remove all hosts."""
@@ -315,19 +422,20 @@ def remove():
         printver()
         print("Remove a Host\n")
         delay()
-        print("Select a host to delete (-1 to exit):")
+        print("Select a host to delete:")
         start = 2   # the index to start printing at
-        printarr(start)
+        print("0. Back")
+        printarr(start, True)
         delay()
         ch = input("> ")
         try:
             sel = int(ch)
-            if sel == -1:
+            if sel == 0:
                 return
-            if sel < 0 or sel > max_len-start:
+            if sel < 0 or sel > max_len-start+1:
                 raise ValueError('Invalid selection')
             else:
-                deletion = menuops[sel+start]
+                deletion = menuops[sel+start-1]
                 if deletion[0] == deletion[3]:
                     print("Delete {ip}? This cannot be undone. (Y/n)".format(ip=deletion[0]))
                 else:
@@ -358,20 +466,21 @@ def view():
         printver()
         print("View a Host\n")
         delay()
-        print("Select a host to view the data for (-1 to return):")
-        printarr(start)
+        print("Select a host to view the data for):")
+        print("0. Back")
+        printarr(start, True)
         delay()
         ch = input("> ")
         print()
         try:
             sel = int(ch)
-            if sel == -1:
+            if sel == 0:
                 flag = False
                 return
             if sel < 0 or sel > max_len-start:
                 raise ValueError('Invalid selection')
             else:
-                lookup = menuops[sel+start]
+                lookup = menuops[sel+start-1]
                 if not lookup[0] == lookup[3]:
                     print("Nick: {}".format(lookup[0]))
                     delay()
@@ -404,21 +513,18 @@ def submenu():
     subops = []
     subops.append('Back')
     subops.append('Add')
+    subops.append('View')
     subops.append('Edit')
     subops.append('Remove')
     subops.append('Clear all')
-    subops.append('View')
     subops_len = len(subops)
-    #subscr.clear()
-    #subscr.addstr(0, 0, "More Options", curses.A_REVERSE)
-        #subscr.move(1, 0)
-    char = ''
     while True:
         clear()
         printver()
         print("More Options\n")
         delay()
         print("Pick an option:")
+        delay()
         for j in range(0, subops_len):
             delay()
             print("{num}. {option}".format(num=j, option=subops[j]))
