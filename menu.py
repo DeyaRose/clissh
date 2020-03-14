@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 import sys, os, shelve, curses, getpass, traceback, time
 import subprocess as sb
-from curses import wrapper
-# TODO loop through shelf, add known hosts to array, the append "exit" and "add" (opposite of what it is now) (may be removed)
-# TODO make the hosts appear in the list they were added
-# TODO make a way to sort the hosts differently
 # TODO implement different sorting methods - alphabetical, date/time added, etc
 # TODO implement "pages" if there are too many hosts (get terminal height and account for that)
 # TODO Find if an added host is a duplicate (compare ip, username, port, etc)
@@ -16,7 +12,7 @@ from curses import wrapper
 NAME = "CliSSH"
 BUILD = "1.0b"
 VERSION = NAME + " v" + str(BUILD)
-PR_DEL = 0.0#4
+PR_DEL = 0.04   # print delay, for that cool effect
 
 menuops = []
 firstrun = True
@@ -25,6 +21,7 @@ firstrun = True
 fdir = os.getenv("HOME") + "/.clissh/" # the path to the hosts file
 fname = "hosts"
 fullpth = fdir + fname
+
 # if the path doesnt exist,
 if not os.path.exists(fdir):
     try:
@@ -34,33 +31,40 @@ if not os.path.exists(fdir):
         # if it fails, print an error message.
         print("[!!] Error creating path")
 
-# open the databse 
+# open the databse
 db = shelve.open(fullpth, flag='c', writeback=True)
-max_len = len(menuops)
+
+max_len = 0
 def refresh_db():
     global menuops
     del menuops[:]
+    global firstrun
     menuops.append(['Exit'])
     menuops.append(['More'])
     klist = list(db.keys())
     klen = len(klist)
-    if klen == 0:   # if the list has nothing (empty),
+    if klen == 0:   # if the list is empty,
         # the program should prompt the user to add a host
-        pass
+        firstrun = True
     else:   # but if it has stuff,
-        global firstrun
         firstrun = False
-        for k in db:
-            # add it to the menu options.
-            menuops.append([k, db[k][0], db[k][1], db[k][2], db[k][3]])
+        counter = 0
+        for _ in range(klen):
+            for k in db:
+                # add it to the menu options.
+                if db[k][4] == counter:
+                    menuops.append([k, db[k][0], db[k][1], db[k][2], db[k][3], db[k][4]])
+            counter += 1
     global max_len
     max_len = len(menuops)
 
-#menuops.append(['<nick>', '<username>', '<password>', '<ip>', '<port>'])
+#menuops.append(['<nick>', '<username>', '<password>', '<ip>', '<port>', '<number>'])
+# TODO: Implement '<number>'
+# in listing: `if db[<nick>][4] == n; print`
 
 # nick, user, pass, ip, port
 
-# TODO: check and install requirements; openssh & sshpass, getpass #<curses>
+# TODO: check and install requirements; openssh & sshpass, getpass
 
 def connect(idx):
     if idx < 0:
@@ -72,6 +76,9 @@ def connect(idx):
     ssh_cmd = ['sshpass', '-p', passwd, 'ssh', user + '@' + target, '-p', pt]
     rcode = sb.run(ssh_cmd)
     return rcode.returncode
+
+def delay():
+    time.sleep(PR_DEL)
 
 def pause(flag=True):
     if flag:
@@ -86,13 +93,22 @@ def clear():
 
 def printver():
     print(VERSION)
+    delay()
+    print()
+    delay()
 
 def printarr(start=0):
     for i in range(0, max_len-start):
-        time.sleep(PR_DEL)
+        delay()
         print("{num}. {option}".format(num=i, option=menuops[i+start][0]))
+        #if start == 0 and not i == 0 and not i == 1:
+            #if menuops[i+start][5] == i:
+                #print("[!!!]")
+                #print("{num}. {option}".format(num=i, option=menuops[i+start][0]))
+        #else:
+            #print("{num}. {option}".format(num=i, option=menuops[i+start][0]))
 
-def menu(stdscr):
+def menu():
     """The main menu, where the user picks a host or another option."""
     try:
         refresh_db()
@@ -100,8 +116,8 @@ def menu(stdscr):
             # prompt the user to add a host if none are found
             print("No hosts found. Do you want to add one? (Y/n)")
             ch = input("> ")
-            if "yes" in ch or not ch:
-                add(None)
+            if ch in "yes" or not ch:
+                add()
                 refresh_db()
             else:
                 pass
@@ -109,14 +125,15 @@ def menu(stdscr):
             errcode = 0
             clear()
             printver()
-            print()
             if errcode == 0:
                 print("Main Menu\n")
             else:
                 print("[-] Error code:", str(errcode))
                 print()
+            delay()
             print("Pick an option:")
             printarr()
+            delay()
             char = input('> ')
             print() # add a space
             flag = True
@@ -127,7 +144,7 @@ def menu(stdscr):
                     flag = False
                     return
                 elif sel == 1:
-                    submenu(None)
+                    submenu()
                     flag = False
                 else:
                     if sel > max_len:
@@ -142,6 +159,8 @@ def menu(stdscr):
             except IndexError as i:
                 print("[!!] Error: IndexError -- " + str(i))
                 del i
+            except EOFError:
+                return
             except Exception as e:
                 print("[!!] Error: " + str(e))
                 print(traceback.format_exc())
@@ -154,7 +173,7 @@ def menu(stdscr):
     finally:
         db.close()
 
-def add(addscr):
+def add():
     """The function for adding a remote host."""
     prompts = [
         "Enter the username: ",
@@ -165,6 +184,7 @@ def add(addscr):
         "Enter a nickname for this host (opt.): "
     ]
     # initialize the variables
+    n = len(list(db.keys()))
     user = ''
     passwd = ''
     passwdconf = ''
@@ -173,8 +193,9 @@ def add(addscr):
     nick = ''
     clear()
     printver()
-    print()
     print("Add a Host\n")
+    print("Number: " + str(n))
+    delay()
     print(prompts[0], end='')
     # ask for the username
     user = input()
@@ -234,14 +255,17 @@ def add(addscr):
         nick = str(target)
     # confirm with the user that the entered information was correct
     print("Is the entered information correct? (Y/n)")
+    delay()
     if target == nick:
         print("Target: {}; Port: {}; Username: {}; Password: (hidden)".format(target, port, user))
     else:
         print("Nick: {}; Target: {}; Port: {}; Username: {}; Password: (hidden)".format(nick, target, port, user))
+    delay()
     ch = input("> ")
     if "yes" in ch or not ch:
         # TODO: auto-add fingerprints/etc
-        db[nick] = [user, passwd, target, port]
+        # loop through and find number
+        db[nick] = [user, passwd, target, port, n]
         print("[+] Host added to database located at {}.".format(fullpth))
         db.sync()
         refresh_db()
@@ -251,28 +275,50 @@ def add(addscr):
         add(None)
         pass
 
-def edit(editscr):
+def edit():
     """Edit a host."""
     # TODO
     return
 
-def clearall(cascr):
+def clearall():
     """Remove all hosts."""
-    cascr.clear()
-    cascr.addstr(0, 0, "Clear All", curses.A_REVERSE)
-    return
+    clear()
+    printver()
+    print("Clear All Hosts\n")
+    delay()
+    print("Clearing all hosts will remove all stored data about the hosts.")
+    delay()
+    print("You will not be able to recover the information.\n")
+    delay()
+    print("Continue? (y/N)")
+    delay()
+    ch = input("> ")
+    print()
+    if ch in "yes":
+        # TODO: ask again then delete by looping thru keys and deleting all and refreshing the database
+        for k in db.keys():
+            del db[k]
+        if len(db.keys()) == 0:
+            print("[i] All keys cleared.")
+        else:
+            print("More than 0 keys")
+        refresh_db()
+    else:
+        print("Not deleting.")
+    pause()
 
-def remove(remscr):
+def remove():
     """Remove a specified host."""
     # del db[<name>]
     while 1:
         clear()
         printver()
-        print()
         print("Remove a Host\n")
+        delay()
         print("Select a host to delete (-1 to exit):")
         start = 2   # the index to start printing at
         printarr(start)
+        delay()
         ch = input("> ")
         try:
             sel = int(ch)
@@ -299,10 +345,61 @@ def remove(remscr):
         except ValueError as v:
             print("[!!] Error: ValueError -- " + str(v))
             del v
+        except EOFError:
+            return
     pause()
     return
 
-def submenu(subscr):
+def view():
+    start = 2
+    flag = True
+    while 1:
+        clear()
+        printver()
+        print("View a Host\n")
+        delay()
+        print("Select a host to view the data for (-1 to return):")
+        printarr(start)
+        delay()
+        ch = input("> ")
+        print()
+        try:
+            sel = int(ch)
+            if sel == -1:
+                flag = False
+                return
+            if sel < 0 or sel > max_len-start:
+                raise ValueError('Invalid selection')
+            else:
+                lookup = menuops[sel+start]
+                if not lookup[0] == lookup[3]:
+                    print("Nick: {}".format(lookup[0]))
+                    delay()
+                print("User: {}".format(lookup[1]))
+                delay()
+                print("Pass: (hidden)")
+                delay()
+                print("Target: {}".format(lookup[3]))
+                delay()
+                print("Port: {}".format(lookup[4]))
+                #delay()
+                #print("Number: {}".format(lookup[5]))
+        except ValueError as v:
+            print("[!!] Error: ValueError -- " + str(v))
+            del v
+        except IndexError as i:
+            print("[!!] Error: IndexError -- " + str(i))
+            del i
+        except EOFError:
+            return
+        except Exception as e:
+            print("[!!] Error: " + str(e))
+            print(traceback.format_exc())
+            del e
+        finally:
+            pause(flag)
+
+def submenu():
     """The submenu function where the user can select any other function."""
     subops = []
     subops.append('Back')
@@ -310,6 +407,7 @@ def submenu(subscr):
     subops.append('Edit')
     subops.append('Remove')
     subops.append('Clear all')
+    subops.append('View')
     subops_len = len(subops)
     #subscr.clear()
     #subscr.addstr(0, 0, "More Options", curses.A_REVERSE)
@@ -318,39 +416,44 @@ def submenu(subscr):
     while True:
         clear()
         printver()
-        print()
         print("More Options\n")
+        delay()
         print("Pick an option:")
         for j in range(0, subops_len):
-            time.sleep(PR_DEL)
+            delay()
             print("{num}. {option}".format(num=j, option=subops[j]))
+        delay()
         ch = input("> ")
         try:
             sel = int(ch)
             if sel == subops.index('Back'):
                 return
             elif sel == subops.index('Add'):
-                add(None)
+                add()
                 break
             elif sel == subops.index('Edit'):
-                edit(None)
+                edit()
                 break
             elif sel == subops.index('Remove'):
-                remove(None)
+                remove()
                 break
             elif sel == subops.index('Clear all'):
-                clearall(None)
+                clearall()
                 break
+            elif sel == subops.index('View'):
+                view()
             else:
                 print("\n[!!] Invalid answer")
                 pause()
         except ValueError as v:
             print("[!!] Error: ValueError -- " + str(v))
             del v
+        except EOFError:
+            return
         except Exception as e:
             print("[!!] Error: " + str(e))
             del e
 
 # start the program at the menu() function
 if __name__ == "__main__":
-    menu(None)
+    menu()
