@@ -16,7 +16,6 @@ import subprocess as sb
 NAME = "CliSSH"
 BUILD = "1.0b"
 VERSION = NAME + " v" + str(BUILD)
-PR_DEL = 0.0#4   # print delay, for that cool effect
 
 menuops = []
 firstrun = True
@@ -88,9 +87,6 @@ def connect(idx):
     rcode = sb.run(ssh_cmd)
     return rcode.returncode
 
-def delay():
-    time.sleep(PR_DEL)
-
 def listdata():
     klist = list(db.keys())
     klen = len(klist)
@@ -111,13 +107,10 @@ def clear():
 
 def printver():
     print(VERSION)
-    delay()
     print()
-    delay()
 
 def printarr(start=0, list_one=False):
     for i in range(0 if not list_one else 1, max_len-start + (0 if not list_one else 1)):
-        delay()
         print("{num}. {option}".format(num=i, option=menuops[i+start - (0 if not list_one else 1)][0]))
 
 def check_duplicates(in_arr):
@@ -145,7 +138,6 @@ def menu():
             clear()
             printver()
             print("No hosts found. Do you want to add one? (Y/n)")
-            delay()
             ch = input("> ")
             if ch in "yes" or not ch:
                 add()
@@ -161,10 +153,8 @@ def menu():
             else:
                 print("[-] Error code:", str(errcode))
                 print()
-            delay()
             print("Pick an option:")
             printarr()
-            delay()
             char = input('> ')
             print() # add a space
             flag = True
@@ -272,7 +262,6 @@ def add():
     printver()
     print("Add a Host\n")
     #print("Number: " + str(n))
-    delay()
     # ask for the username
     user = add_user()
     while 1:
@@ -298,12 +287,10 @@ def add():
         nick = str(target)
     # confirm with the user that the entered information was correct
     print("Is the entered information correct? (Y/n)")
-    delay()
     if target == nick:
         print("Target: {}; Port: {}; Username: {}; Password: (hidden)".format(target, port, user))
     else:
         print("Nick: {}; Target: {}; Port: {}; Username: {}; Password: (hidden)".format(nick, target, port, user))
-    delay()
     ch = input("> ")
     if "yes" in ch or not ch:
         # TODO: auto-add fingerprints/etc
@@ -328,11 +315,9 @@ def edit():
         clear()
         printver()
         print("Edit a Host\n")
-        delay()
         print("Select a host to edit:")
         print("0. Back")
         printarr(start, True)
-        delay()
         ch = input("> ")
         print()
         try:
@@ -357,7 +342,6 @@ def edit():
                     print("Editing {}".format(selection[0] if not selection[0] == selection[3] else selection[3]) + "\n")
                     print("Select an option:")
                     for opt in range(len(edit_opts)):
-                        delay()
                         print("{}. {}".format(opt, edit_opts[opt]))
                     choice = input("> ")
                     print()
@@ -464,13 +448,9 @@ def clearall():
     clear()
     printver()
     print("Clear All Hosts\n")
-    delay()
     print("Clearing all hosts will remove all stored data about the hosts.")
-    delay()
     print("You will not be able to recover the information.\n")
-    delay()
     print("Continue? (y/N)")
-    delay()
     ch = input("> ")
     print()
     if ch in "yes":
@@ -493,12 +473,10 @@ def remove():
         clear()
         printver()
         print("Remove a Host\n")
-        delay()
         print("Select a host to delete:")
         start = 2   # the index to start printing at
         print("0. Back")
         printarr(start, True)
-        delay()
         ch = input("> ")
         try:
             sel = int(ch)
@@ -537,11 +515,9 @@ def view():
         clear()
         printver()
         print("View a Host\n")
-        delay()
         print("Select a host to view the data for):")
         print("0. Back")
         printarr(start, True)
-        delay()
         ch = input("> ")
         print()
         try:
@@ -555,15 +531,10 @@ def view():
                 lookup = menuops[sel+start-1]
                 if not lookup[0] == lookup[3]:
                     print("Nick: {}".format(lookup[0]))
-                    delay()
                 print("User: {}".format(lookup[1]))
-                delay()
                 print("Pass: (hidden)")
-                delay()
                 print("Target: {}".format(lookup[3]))
-                delay()
                 print("Port: {}".format(lookup[4]))
-                #delay()
                 #print("Number: {}".format(lookup[5]))
         except ValueError as v:
             print("[!!] Error: ValueError -- " + str(v))
@@ -595,13 +566,9 @@ def submenu():
         clear()
         printver()
         print("More Options\n")
-        delay()
         print("Pick an option:")
-        delay()
         for j in range(0, subops_len):
-            delay()
             print("{num}. {option}".format(num=j, option=subops[j]))
-        delay()
         ch = input("> ")
         try:
             sel = int(ch)
