@@ -10,12 +10,13 @@ import subprocess as sb
 # TODO encrypt the data with a password
 # TODO make the user enter a password on start to decrypt the data
 # TODO multiple-user support (?)
+# TODO add the ability to run custom commands on connect
 
 # constants
 NAME = "CliSSH"
 BUILD = "1.0b"
 VERSION = NAME + " v" + str(BUILD)
-PR_DEL = 0.04   # print delay, for that cool effect
+PR_DEL = 0.0#4   # print delay, for that cool effect
 
 menuops = []
 firstrun = True
@@ -72,7 +73,7 @@ def refresh_db():
 
 #menuops.append(['<nick>', '<username>', '<password>', '<ip>', '<port>', '<number>'])
 
-# nick, user, pass, ip, port
+# nick, user, pass, ip, port, number
 
 # TODO: check and install requirements; openssh & sshpass, getpass
 
@@ -83,12 +84,19 @@ def connect(idx):
     passwd = menuops[idx][2]
     target = menuops[idx][3]
     pt = menuops[idx][4]
-    ssh_cmd = ['sshpass', '-p', passwd, 'ssh', user + '@' + target, '-p', pt]
+    ssh_cmd = ['sshpass', '-p', passwd, 'ssh', user + '@' + target, '-p', str(pt)]
     rcode = sb.run(ssh_cmd)
     return rcode.returncode
 
 def delay():
     time.sleep(PR_DEL)
+
+def listdata():
+    klist = list(db.keys())
+    klen = len(klist)
+    for x in klist:
+        print("Key: {}".format(db[x]))
+    pause()
 
 def pause(flag=True):
     if flag:
@@ -111,12 +119,22 @@ def printarr(start=0, list_one=False):
     for i in range(0 if not list_one else 1, max_len-start + (0 if not list_one else 1)):
         delay()
         print("{num}. {option}".format(num=i, option=menuops[i+start - (0 if not list_one else 1)][0]))
-        #if start == 0 and not i == 0 and not i == 1:
-            #if menuops[i+start][5] == i:
-                #print("[!!!]")
-                #print("{num}. {option}".format(num=i, option=menuops[i+start][0]))
-        #else:
-            #print("{num}. {option}".format(num=i, option=menuops[i+start][0]))
+
+def check_duplicates(in_arr):
+    klist = list(db.keys())
+    klen = len(klist)
+    if not len(in_arr) == 6:
+        print("Not the same length")
+        return False
+    counter = 0
+    for k in klist:
+        for x in range(6):
+            if not in_arr[x] == db[k][x]:
+                print("Mismatch on idx {}: {} | {}".format(x, in_arr[x], db[k][x]))
+                return False
+    print("No mismatches")
+    return True
+
 
 def menu():
     """The main menu, where the user picks a host or another option."""
@@ -173,6 +191,7 @@ def menu():
                 print("[!!] Error: IndexError -- " + str(i))
                 del i
             except EOFError:
+                flag = False
                 return
             except Exception as e:
                 print("[!!] Error: " + str(e))
@@ -212,14 +231,16 @@ def add_pass():
     return passwd
 
 def add_target():
+    # Ask for the target IP
     return input(prompts[3])
 
 def add_port():
+    # Ask for the port
     while 1:
         try:
             port = input(prompts[4])
             if not port:
-                port = 22
+                port = '22'
                 break
             else:
                 if int(port) > 65535 or int(port) < 0:
@@ -236,11 +257,11 @@ def add_port():
 
 def add_nick(flag=True):
     nick = input(prompts[5].format(" (opt.)" if flag else ""))
-    return None if not input else nick
+    return None if not nick else nick
 
 def add():
     """The function for adding a remote host."""
-        # initialize the variables
+    # initialize the variables
     n = len(list(db.keys()))
     user = ''
     passwd = ''
@@ -257,24 +278,20 @@ def add():
     while 1:
         # delete the previous lines
         passwd = add_pass()
-        if passwd is None:
-            print("[!!] The passwords you entered did not match. (Press <Enter> to retry)", end='')
-            # they don't match, so set them back to null so the loop continues
-            passwd = ''
-            passwdconf = ''
-            input()
-            # Delete the previous lines
-            clear()
-            printver()
-            print("Add a Host\n")
-            print(prompts[0] + user)
-        else:
+        if passwd is not None:
             break
-    # get target ip
+        print("[!!] The passwords you entered did not match. (Press <Enter> to retry)", end='')
+        # they don't match, so set them back to null so the loop continues
+        passwd = ''
+        passwdconf = ''
+        input()
+        # Delete the previous lines
+        clear()
+        printver()
+        print("Add a Host\n")
+        print(prompts[0] + user)
     target = add_target()
-    # get target port
     port = add_port()
-    # get the nickname for the target
     nick = add_nick()
     if nick is None:
         # if nothing is entered, make it the ip
@@ -291,7 +308,8 @@ def add():
     if "yes" in ch or not ch:
         # TODO: auto-add fingerprints/etc
         # loop through and find number
-        db[nick] = [user, passwd, target, port, n]
+        addition = [user, passwd, target, port, n]
+        db[nick] = addition
         print("[+] Host added to database located at {}.".format(fullpth))
         db.sync()
         refresh_db()
@@ -305,6 +323,7 @@ def edit():
     """Edit a host."""
     # TODO
     start = 2
+    flag = True
     while 1:
         clear()
         printver()
@@ -319,6 +338,7 @@ def edit():
         try:
             sel = int(ch)
             if sel == 0:
+                flag = False
                 return
             if sel < 0 or sel > max_len-start+1:
                 raise ValueError('Invalid selection')
@@ -335,57 +355,109 @@ def edit():
                     clear()
                     printver()
                     print("Editing {}".format(selection[0] if not selection[0] == selection[3] else selection[3]) + "\n")
+                    print("Select an option:")
                     for opt in range(len(edit_opts)):
                         delay()
                         print("{}. {}".format(opt, edit_opts[opt]))
                     choice = input("> ")
                     print()
                     sln = int(choice)
+                    dupe = False
                     # TODO for all: if data is same as before, make no change
                     if sln == edit_opts.index('Back'):
+                        flag = False
                         break # Go back to selecting a host
                     elif sln == edit_opts.index('Nick'):
-                        oldnick = selection[0]
-                        print("Old nick:", oldnick if not selection[0] == selection[3] else "<none>")
+                        old_nick = selection[0]
+                        print("Old nick:", old_nick if not selection[0] == selection[3] else "<none>")
                         new_nick = add_nick(False)
                         if new_nick:
-                            print("New nick:", new_nick)
+                            # checking for duplicate keys
+                            for n in list(db.keys()):
+                                if not new_nick == n:
+                                    pass
+                                    #print("No Duplicates")
+                                else:
+                                    #print("Duplicates exist")
+                                    dupe = True
+                                    break
+                            if dupe:
+                                print("[!!] Error: Duplicate nick")
+                            else:
+                                # There are no duplicates
+                                # TODO: Check if it's ok to change
+                                db[new_nick] = db[old_nick]
+                                del db[old_nick]
+                                print("Nickname updated to {}".format(new_nick))
                         else:
-                            # TODO: Dopy all data that had old_nick key into new_nick, then `del db[old_key]`
-                            # TODO: Duplicate checking, ask user to overwrite (Y/n), if `no`, don't do anything and exit
                             pass
                     elif sln == edit_opts.index('Username'):
+                        # TODO username verification?? e.g. spaces/symbols?
                         old_user = selection[1]
-                        print("Edit user")
+                        print("Old username:", old_user)
                         new_user = add_user()
                         if new_user:
-                            print("New user:", new_user)
+                            print("New username:", new_user)
+                            #edited = [selection[0], new_user, selection[2], selection[3], selection[4], selection[5]]
+                            if new_user == old_user:
+                                print("Duplicate usernames; no change")
+                            else:
+                                db[selection[0]][0] = new_user
+                                print("\nUsername updated.")
                         else:
-                            print("[i] No user given.")
+                            print("[i] No username given.")
                             # ask whether or not they meant to and if yes, exit, otherwise do it again
                     elif sln == edit_opts.index('Password'):
                         old_pass = selection[2]
-                        print("Edit pass")
+                        print("Edit password:")
+                        while 1:
+                            new_pass = add_pass()
+                            if new_pass is not None:
+                                break
+                            elif not new_pass:
+                                print("[i] No password given.")
+                                break
+                            else:
+                                if old_pass == new_pass:
+                                    print("Duplicate passwords; no change")
+                                else:
+                                    db[selection[0]][1] = new_pass
+                                    print("\nPassword updated.")
                     elif sln == edit_opts.index('Target'):
                         old_target = selection[3]
-                        print("Edit target")
+                        print("Old target:", str(old_target))
+                        new_target = add_target()
+                        if new_target:
+                            print("New target:", new_target)
+                            if new_target == old_target:
+                                print("Duplicate targets; no change")
+                            else:
+                                db[selection[0]][2] = new_target
+                                print("\nTarget updated.")
                     elif sln == edit_opts.index('Port'):
                         old_port = selection[4]
-                        print("Edit port")
+                        print("Old port:", str(old_port))
+                        new_port = add_port()
+                        if new_port == old_port:
+                            print("Duplicate ports; no change")
+                        else:
+                            db[selection[0]][3] = new_port
+                            print("New port:", str(new_port))
                     else:
                         print('[!!] Invalid selection.') # Try again
                     refresh_db()
-                    pause()
+                    pause(flag)
         except ValueError as v:
             print("[!!] Error: ValueError -- " + str(v))
             del v
         except EOFError:
+            flag = False
             return
         except Exception as e:
             print("[!!] Error: " + str(e))
             print(traceback.format_exc())
         finally:
-            pause()
+            pause(false)
 
 def clearall():
     """Remove all hosts."""
@@ -402,7 +474,7 @@ def clearall():
     ch = input("> ")
     print()
     if ch in "yes":
-        # TODO: ask again then delete by looping thru keys and deleting all and refreshing the database
+        # TODO: ask again for confirmation
         for k in db.keys():
             del db[k]
         if len(db.keys()) == 0:
@@ -517,6 +589,7 @@ def submenu():
     subops.append('Edit')
     subops.append('Remove')
     subops.append('Clear all')
+    subops.append('Print All Data')
     subops_len = len(subops)
     while True:
         clear()
@@ -548,6 +621,8 @@ def submenu():
                 break
             elif sel == subops.index('View'):
                 view()
+            elif sel == subops.index('Print All Data'):
+                listdata()
             else:
                 print("\n[!!] Invalid answer")
                 pause()
