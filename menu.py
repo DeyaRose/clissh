@@ -96,7 +96,7 @@ def listdata():
 
 def pause(flag=True):
     if flag:
-        print("\n(Press <Enter> to continue)")
+        print(bcolors.FLASH + "\n(Press <Enter> to continue)" + bcolors.ENDC)
         input()
     else:
         return
@@ -109,9 +109,18 @@ def printver():
     print(VERSION)
     print()
 
+def printtitle(string):
+    print(bcolors.REVERSE + string + bcolors.ENDC)
+
+def printheader(string):
+    print(bcolors.UNDERLINE + string + bcolors.ENDC)
+
+def printinput(string):
+    return input(bcolors.BOLD + "> " + bcolors.ENDC)
+
 def printarr(start=0, list_one=False):
     for i in range(0 if not list_one else 1, max_len-start + (0 if not list_one else 1)):
-        print("{num}. {option}".format(num=i, option=menuops[i+start - (0 if not list_one else 1)][0]))
+        print("{num}. {ul}{option}{endc}".format(num=i, option=menuops[i+start - (0 if not list_one else 1)][0], ul=bcolors.ENDC, endc=bcolors.ENDC))
 
 def check_duplicates(in_arr):
     klist = list(db.keys())
@@ -132,6 +141,7 @@ def check_duplicates(in_arr):
 def menu():
     """The main menu, where the user picks a host or another option."""
     try:
+        errcode = 0
         refresh_db()
         if firstrun:
             # prompt the user to add a host if none are found
@@ -139,23 +149,19 @@ def menu():
             printver()
             print("No hosts found. Do you want to add one? (Y/n)")
             ch = input("> ")
+            print()
             if ch in "yes" or not ch:
                 add()
                 refresh_db()
             else:
                 pass
         while True:
-            errcode = 0
             clear()
             printver()
-            if errcode == 0:
-                print("Main Menu\n")
-            else:
-                print("[-] Error code:", str(errcode))
-                print()
-            print("Pick an option:")
+            printtitle("Main Menu{}\n".format(" (err: " + str(errcode) + ")" if not errcode == 0 else ""))
+            printheader("Pick an option:")
             printarr()
-            char = input('> ')
+            char = printinput('> ')
             print() # add a space
             flag = True
             try:
@@ -190,9 +196,13 @@ def menu():
             finally:
                 pause(flag)
             char = ''
-    except:
-        pass
+    except EOFError:
+        print('\n\n[*] Goodbye!')
+    except Exception as e:
+        print("Error: " + str(e))
     finally:
+        print(f"{bcolors.ENDC}")
+        bcolors.disable(bcolors)
         db.close()
 
 def add_user():
@@ -205,10 +215,10 @@ def add_pass():
     passwdconf = ''
     # ask for password & password confirmation
     while passwd is passwdconf: # loop should be entered because both vars are null
-        print(prompts[1], end='')
-        passwd = getpass.getpass("")
-        print(prompts[2], end='')
-        passwdconf = getpass.getpass("")
+        #print(prompts[1], end='')
+        passwd = getpass.getpass(prompts[1])
+        #print(prompts[2], end='')
+        passwdconf = getpass.getpass(prompts[2])
         try:
             if passwdconf != passwd:    # if they didn't match, do it again
                 return None
@@ -260,8 +270,7 @@ def add():
     nick = ''
     clear()
     printver()
-    print("Add a Host\n")
-    #print("Number: " + str(n))
+    printtitle("Add a Host\n")
     # ask for the username
     user = add_user()
     while 1:
@@ -277,7 +286,7 @@ def add():
         # Delete the previous lines
         clear()
         printver()
-        print("Add a Host\n")
+        printtitle("Add a Host\n")
         print(prompts[0] + user)
     target = add_target()
     port = add_port()
@@ -285,19 +294,20 @@ def add():
     if nick is None:
         # if nothing is entered, make it the ip
         nick = str(target)
+    print()
     # confirm with the user that the entered information was correct
-    print("Is the entered information correct? (Y/n)")
+    printheader("Is the entered information correct? (Y/n)")
     if target == nick:
         print("Target: {}; Port: {}; Username: {}; Password: (hidden)".format(target, port, user))
     else:
         print("Nick: {}; Target: {}; Port: {}; Username: {}; Password: (hidden)".format(nick, target, port, user))
-    ch = input("> ")
+    ch = printinput("> ")
     if "yes" in ch or not ch:
         # TODO: auto-add fingerprints/etc
         # loop through and find number
         addition = [user, passwd, target, port, n]
         db[nick] = addition
-        print("[+] Host added to database located at {}.".format(fullpth))
+        print("\n[+] Host added to database located at {}.".format(fullpth))
         db.sync()
         refresh_db()
         pause()
@@ -314,11 +324,11 @@ def edit():
     while 1:
         clear()
         printver()
-        print("Edit a Host\n")
-        print("Select a host to edit:")
+        printtitle("Edit a Host\n")
+        printheader("Select a host to edit:")
         print("0. Back")
         printarr(start, True)
-        ch = input("> ")
+        ch = printinput("> ")
         print()
         try:
             sel = int(ch)
@@ -339,15 +349,14 @@ def edit():
                     selection = menuops[sel+start-1]
                     clear()
                     printver()
-                    print("Editing {}".format(selection[0] if not selection[0] == selection[3] else selection[3]) + "\n")
-                    print("Select an option:")
+                    printtitle("Editing {}".format(selection[0] if not selection[0] == selection[3] else selection[3]) + "\n")
+                    printheader("Select an option:")
                     for opt in range(len(edit_opts)):
                         print("{}. {}".format(opt, edit_opts[opt]))
-                    choice = input("> ")
+                    choice = printinput("> ")
                     print()
                     sln = int(choice)
                     dupe = False
-                    # TODO for all: if data is same as before, make no change
                     if sln == edit_opts.index('Back'):
                         flag = False
                         break # Go back to selecting a host
@@ -384,22 +393,22 @@ def edit():
                             print("New username:", new_user)
                             #edited = [selection[0], new_user, selection[2], selection[3], selection[4], selection[5]]
                             if new_user == old_user:
-                                print("Duplicate usernames; no change")
+                                print("Username unchanged")
                             else:
                                 db[selection[0]][0] = new_user
                                 print("\nUsername updated.")
                         else:
-                            print("[i] No username given.")
+                            print("No username given.")
                             # ask whether or not they meant to and if yes, exit, otherwise do it again
                     elif sln == edit_opts.index('Password'):
                         old_pass = selection[2]
                         print("Edit password:")
                         while 1:
                             new_pass = add_pass()
-                            if new_pass is not None:
+                            if new_pass is None:
                                 break
                             elif not new_pass:
-                                print("[i] No password given.")
+                                print("[i] Password unchanged.")
                                 break
                             else:
                                 if old_pass == new_pass:
@@ -407,6 +416,7 @@ def edit():
                                 else:
                                     db[selection[0]][1] = new_pass
                                     print("\nPassword updated.")
+                                break
                     elif sln == edit_opts.index('Target'):
                         old_target = selection[3]
                         print("Old target:", str(old_target))
@@ -436,7 +446,6 @@ def edit():
             del v
         except EOFError:
             flag = False
-            return
         except Exception as e:
             print("[!!] Error: " + str(e))
             print(traceback.format_exc())
@@ -447,23 +456,24 @@ def clearall():
     """Remove all hosts."""
     clear()
     printver()
-    print("Clear All Hosts\n")
+    printtitle("Clear All Hosts\n")
     print("Clearing all hosts will remove all stored data about the hosts.")
     print("You will not be able to recover the information.\n")
     print("Continue? (y/N)")
-    ch = input("> ")
+    ch = printinput("> ")
     print()
-    if ch in "yes":
-        # TODO: ask again for confirmation
-        for k in db.keys():
-            del db[k]
-        if len(db.keys()) == 0:
-            print("[i] All keys cleared.")
-        else:
-            print("More than 0 keys")
-        refresh_db()
-    else:
-        print("Not deleting.")
+    if ch:
+        if ch in "yes":
+            # TODO: ask again for confirmation
+            for k in db.keys():
+                del db[k]
+            if len(db.keys()) == 0:
+                print("[i] All keys cleared.")
+            else:
+                print("More than 0 keys")
+            refresh_db()
+            return
+    print("Not deleting.")
     pause()
 
 def remove():
@@ -472,12 +482,12 @@ def remove():
     while 1:
         clear()
         printver()
-        print("Remove a Host\n")
-        print("Select a host to delete:")
+        printtitle("Remove a Host\n")
+        printheader("Select a host to delete:")
         start = 2   # the index to start printing at
         print("0. Back")
         printarr(start, True)
-        ch = input("> ")
+        ch = printinput("> ")
         try:
             sel = int(ch)
             if sel == 0:
@@ -504,7 +514,7 @@ def remove():
             print("[!!] Error: ValueError -- " + str(v))
             del v
         except EOFError:
-            return
+            pass
     pause()
     return
 
@@ -514,11 +524,11 @@ def view():
     while 1:
         clear()
         printver()
-        print("View a Host\n")
-        print("Select a host to view the data for):")
+        printtitle("View a Host\n")
+        printheader("Select a host to view the data for):")
         print("0. Back")
         printarr(start, True)
-        ch = input("> ")
+        ch = printinput("> ")
         print()
         try:
             sel = int(ch)
@@ -530,11 +540,11 @@ def view():
             else:
                 lookup = menuops[sel+start-1]
                 if not lookup[0] == lookup[3]:
-                    print("Nick: {}".format(lookup[0]))
-                print("User: {}".format(lookup[1]))
-                print("Pass: (hidden)")
-                print("Target: {}".format(lookup[3]))
-                print("Port: {}".format(lookup[4]))
+                    print("Nick:\t{}".format(lookup[0]))
+                print("User:\t{}".format(lookup[1]))
+                print("Pass:\t(hidden)")
+                print("Target:\t{}".format(lookup[3]))
+                print("Port:\t{}".format(lookup[4]))
                 #print("Number: {}".format(lookup[5]))
         except ValueError as v:
             print("[!!] Error: ValueError -- " + str(v))
@@ -543,7 +553,7 @@ def view():
             print("[!!] Error: IndexError -- " + str(i))
             del i
         except EOFError:
-            return
+            pass
         except Exception as e:
             print("[!!] Error: " + str(e))
             print(traceback.format_exc())
@@ -560,16 +570,17 @@ def submenu():
     subops.append('Edit')
     subops.append('Remove')
     subops.append('Clear all')
-    subops.append('Print All Data')
+    #subops.append('Print All Data')
     subops_len = len(subops)
     while True:
         clear()
         printver()
-        print("More Options\n")
-        print("Pick an option:")
+        printtitle("More Options\n")
+        printheader("Pick an option:")
         for j in range(0, subops_len):
             print("{num}. {option}".format(num=j, option=subops[j]))
-        ch = input("> ")
+        ch = printinput("> ")
+        print()
         try:
             sel = int(ch)
             if sel == subops.index('Back'):
@@ -588,6 +599,7 @@ def submenu():
                 break
             elif sel == subops.index('View'):
                 view()
+                break
             elif sel == subops.index('Print All Data'):
                 listdata()
             else:
@@ -597,10 +609,30 @@ def submenu():
             print("[!!] Error: ValueError -- " + str(v))
             del v
         except EOFError:
-            return
+            pass
         except Exception as e:
             print("[!!] Error: " + str(e))
             del e
+
+class bcolors:
+    # terminal colors
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    FLASH = '\033[5m'
+    UNDERLINE = '\033[4m'
+    REVERSE = '\033[7m'
+    def disable(self):
+        self.HEADER = ''
+        self.OKBLUE = ''
+        self.OKGREEN = ''
+        self.WARNING = ''
+        self.FAIL = ''
+        self.ENDC = ''
 
 # start the program at the menu() function
 if __name__ == "__main__":
